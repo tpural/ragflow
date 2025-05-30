@@ -1,161 +1,213 @@
-# Based on docker compose .env file
-env:
-  # The type of doc engine to use.
-  # Available options:
-  # - `elasticsearch` (default)
-  # - `infinity` (https://github.com/infiniflow/infinity)
-  # DOC_ENGINE: elasticsearch
-  DOC_ENGINE: infinity
+# Ragflow Helm Chart Configuration
 
-  # The version of Elasticsearch.
-  STACK_VERSION: "8.11.3"
+# -- Override the name for the selector labels, defaults to the chart name
+nameOverride: "ragflow"
 
-  # The password for Elasticsearch
-  ELASTIC_PASSWORD: infini_rag_flow_helm
+# -- Override the full name of the deployed resources, defaults to a combination of the release name and the name for the selector labels
+fullnameOverride: "ragflow"
 
-  # The password for MySQL
-  MYSQL_PASSWORD: infini_rag_flow_helm
-  # The database of the MySQL service to use
-  MYSQL_DBNAME: rag_flow
-
-  # The username for MinIO.
-  MINIO_ROOT_USER: rag_flow
-  # The password for MinIO
-  MINIO_PASSWORD: infini_rag_flow_helm
-
-  # The password for Redis
-  REDIS_PASSWORD: infini_rag_flow_helm
-
-  # The RAGFlow Docker image to download.
-  # Defaults to the v0.19.0-slim edition, which is the RAGFlow Docker image without embedding models.
-  RAGFLOW_IMAGE: infiniflow/ragflow:v0.19.0-slim
-  #
-  # To download the RAGFlow Docker image with embedding models, uncomment the following line instead:
-  # RAGFLOW_IMAGE: infiniflow/ragflow:v0.19.0
-  #
-  # The Docker image of the v0.19.0 edition includes:
-  # - Built-in embedding models:
-  #   - BAAI/bge-large-zh-v1.5
-  #   - BAAI/bge-reranker-v2-m3
-  #   - maidalun1020/bce-embedding-base_v1
-  #   - maidalun1020/bce-reranker-base_v1
-  # - Embedding models that will be downloaded once you select them in the RAGFlow UI:
-  #   - BAAI/bge-base-en-v1.5
-  #   - BAAI/bge-large-en-v1.5
-  #   - BAAI/bge-small-en-v1.5
-  #   - BAAI/bge-small-zh-v1.5
-  #   - jinaai/jina-embeddings-v2-base-en
-  #   - jinaai/jina-embeddings-v2-small-en
-  #   - nomic-ai/nomic-embed-text-v1.5
-  #   - sentence-transformers/all-MiniLM-L6-v2
-  #
-  #
-
-  # The local time zone.
-  TIMEZONE: "Asia/Shanghai"
-
-  # Uncomment the following line if you have limited access to huggingface.co:
-  # HF_ENDPOINT: https://hf-mirror.com
-
-  # The maximum file size for each uploaded file, in bytes.
-  # You can uncomment this line and update the value if you wish to change 128M file size limit
-  # MAX_CONTENT_LENGTH: "134217728"
-  # After making the change, ensure you update `client_max_body_size` in nginx/nginx.conf correspondingly.
-
+# Core ragflow configuration
 ragflow:
-  deployment:
-    strategy:
-    resources:
-  service:
-    # Use LoadBalancer to expose the web interface externally
-    type: ClusterIP
-  api:
-    service:
-      enabled: true
-      type: ClusterIP
+  timezone: "Asia/Shanghai"
 
-infinity:
-  image:
-    repository: infiniflow/infinity
-    tag: v0.6.0-dev3
-  storage:
-    className:
-    capacity: 5Gi
-  deployment:
-    strategy:
-    resources:
-  service:
-    type: ClusterIP
+  components:
+    blob-store:
+      # -- The type of storage to use. (azure, minio, s3)
+      type: "minio" 
+      minio:
+        deploy: true
+        config:
+          user: '${MINIO_USER:-rag_flow}'
+          password: '${MINIO_PASSWORD:-infini_rag_flow}'
+          host: '${MINIO_HOST:-minio}:9000'
+        deployConfig:
+          image:
+            repository: quay.io/minio/minio
+            tag: RELEASE.2023-12-20T01-00-02Z
+          storage:
+            className:
+            capacity: 5Gi
+          deployment:
+            strategy:
+            resources:
+          service:
+            type: ClusterIP
 
-elasticsearch:
-  storage:
-    className:
-    capacity: 20Gi
-  deployment:
-    strategy:
-    resources:
-      requests:
-        cpu: "4"
-        memory: "16Gi"
-  service:
-    type: ClusterIP
+      s3:
+        config:
+          access_key: 'access_key'
+          secret_key: 'secret_key'
+          region: 'region'
+          endpoint_url: 'endpoint_url'
+          bucket: 'bucket'
+          prefix_path: 'prefix_path'
+          signature_version: 'v4'
+          addressing_style: 'path'
+      azure:
+        config:
+          auth_type: 'sas'
+          container_url: 'container_url'
+          sas_token: 'sas_token'
+    
+    doc-engine:
+      # -- The type of doc engine to use. (infinity, elasticsearch)
+      type: "infinity"
+      infinity:
+        deploy: true
+        config:
+          uri: "uri"
+          db_name: "db_name"
+        deployConfig:
+          uri: "uri"
+          db_name: "db_name"
+          image:
+            repository: infiniflow/infinity
+            tag: v0.6.0-dev3
+          storage:
+            className:
+            capacity: 5Gi
+      elasticsearch:
+        deploy: true
+        config:
+          host: "elasticsearch-host"
+          username: "elasticsearch-username"
+          password: "elasticsearch-password"
+        deployConfig:
+          storage:
+            className:
+            capacity: 20Gi
+          deployment:
+            strategy:
+            resources:
+              requests:
+                cpu: "4"
+                memory: "16Gi"
+          service:
+            type: ClusterIP
+      opensearch:
+        config:
+          host: "opensearch-host"
+          username: "opensearch-username"
+          password: "opensearch-password"
 
-minio:
-  image:
-    repository: quay.io/minio/minio
-    tag: RELEASE.2023-12-20T01-00-02Z
-  storage:
-    className:
-    capacity: 5Gi
-  deployment:
-    strategy:
-    resources:
-  service:
-    type: ClusterIP
+    cache:
+      # -- The type of cache to use. (redis)
+      type: "redis"
+      deploy: true
+      config:
+        db: 1
+        password: "redis-password"
+        host: "redis-host"
+      deployConfig:
+        redis:
+          image:
+            repository: valkey/valkey
+            tag: 8
+          storage:
+            className:
+            capacity: 5Gi
+          persistence:
+            enabled: true
+          deployment:
+            strategy:
+            resources:
+          service:
+            type: ClusterIP
 
-mysql:
-  image:
-    repository: mysql
-    tag: 8.0.39
-  storage:
-    className:
-    capacity: 5Gi
-  deployment:
-    strategy:
-    resources:
-  service:
-    type: ClusterIP
+    database:
+    # -- The type of database to use. (mysql, postgres)
+    type: "mysql"
+    mysql:
+      deploy: true
+      config:
+        name: "mysql-name"
+        user: "mysql-user"
+        password: "mysql-password"
+        host: "mysql-host"
+        port: 3306
+        max_connections: 100
+        stale_timeout: 300
+      deployConfig:
+        image:
+          repository: mysql
+          tag: 8.0.39
+        storage:
+          className:
+          capacity: 5Gi
+        deployment:
+          strategy:
+          resources:
+        service:
+          type: ClusterIP
+    postgres:
+      config:
+        name: '${POSTGRES_DBNAME:-rag_flow}'
+        user: '${POSTGRES_USER:-rag_flow}'
+        password: '${POSTGRES_PASSWORD:-infini_rag_flow}'
+        host: '${POSTGRES_HOST:-postgres}'
+        port: 5432
+        max_connections: 100
+        stale_timeout: 30
 
-redis:
-  image:
-    repository: valkey/valkey
-    tag: 8
-  storage:
-    className:
-    capacity: 5Gi
-  persistence:
-    enabled: true
-  deployment:
-    strategy:
-    resources:
-  service:
-    type: ClusterIP
+  oauth:
+    oauth2:
+      display_name: "OAuth2"
+      client_id: "your_client_id"
+      client_secret: "your_client_secret"
+      authorization_url: "https://your-oauth-provider.com/oauth/authorize"
+      token_url: "https://your-oauth-provider.com/oauth/token"
+      userinfo_url: "https://your-oauth-provider.com/oauth/userinfo"
+      redirect_uri: "https://your-app.com/v1/user/oauth/callback/oauth2"
+    oidc:
+      display_name: "OIDC"
+      client_id: "your_client_id"
+      client_secret: "your_client_secret"
+      issuer: "https://your-oauth-provider.com/oidc"
+      scope: "openid email profile"
+      redirect_uri: "https://your-app.com/v1/user/oauth/callback/oidc"
+    github:
+      type: "github"
+      icon: "github"
+      display_name: "Github"
+      client_id: "your_client_id"
+      client_secret: "your_client_secret"
+      redirect_uri: "https://your-app.com/v1/user/oauth/callback/github"
 
+  authentication:
+    client:
+      switch: false
+      http_app_key:
+      http_secret_key:
+    site:
+      switch: false
+    permission:
+      switch: false
+      component: false
+      dataset: false
 
-# This block is for setting up web service ingress. For more information, see:
-# https://kubernetes.io/docs/concepts/services-networking/ingress/
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  user_default_llm:
+    factory: 'Tongyi-Qianwen'
+    api_key: 'sk-xxxxxxxxxxxxx'
+    base_url: ''
+    default_models:
+      chat_model: 'qwen-plus'
+      embedding_model: 'BAAI/bge-large-zh-v1.5@BAAI'
+      rerank_model: ''
+      asr_model: ''
+      image2text_model: ''
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # kubernetes.io/tls-acme: "true"
+    hosts:
+      - host: chart-example.local
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+    tls: []
+    #  - secretName: chart-example-tls
+    #    hosts:
+    #      - chart-example.local
